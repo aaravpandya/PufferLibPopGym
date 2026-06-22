@@ -75,9 +75,15 @@ else
     RAYLIB_NAME='raylib-5.5_macos'
     OMP_LIB=-lomp
     OMP_PREFIX="$(brew --prefix libomp 2>/dev/null || true)"
-    if [ -n "$OMP_PREFIX" ]; then
+    if [ -n "$OMP_PREFIX" ] && [ -f "$OMP_PREFIX/lib/libomp.dylib" ]; then
         OMP_CFLAGS=(-I"$OMP_PREFIX/include" -Xclang -fopenmp)
         OMP_LDFLAGS=(-L"$OMP_PREFIX/lib" "$OMP_LIB")
+    elif [ -f /opt/homebrew/opt/llvm/lib/libomp.dylib ]; then
+        LLVM_PREFIX=/opt/homebrew/opt/llvm
+        CC=${CC:-"$LLVM_PREFIX/bin/clang"}
+        CXX=${CXX:-"$LLVM_PREFIX/bin/clang++"}
+        OMP_CFLAGS=(-fopenmp)
+        OMP_LDFLAGS=(-fopenmp -L"$LLVM_PREFIX/lib" -L"$LLVM_PREFIX/lib/c++" "$OMP_LIB" -Wl,-rpath,"$LLVM_PREFIX/lib" -Wl,-rpath,"$LLVM_PREFIX/lib/c++")
     else
         OMP_CFLAGS=(-Xclang -fopenmp)
         OMP_LDFLAGS=("$OMP_LIB")
@@ -149,7 +155,9 @@ fi
 
 CPU_STUB_INCLUDE=()
 if [ "$MODE" = "cpu" ] && [ -d "$SRC_DIR/cpu_stubs" ]; then
-    CPU_STUB_INCLUDE=(-I"$SRC_DIR/cpu_stubs")
+    CPU_STUB_INCLUDE=(-I"$SRC_DIR/cpu_stubs" -I./src/cpu_stubs)
+elif [ "$MODE" = "cpu" ]; then
+    CPU_STUB_INCLUDE=(-I./src/cpu_stubs)
 fi
 
 NVCC_ENV_HOST_FLAGS=()
