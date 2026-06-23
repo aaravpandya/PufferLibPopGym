@@ -51,6 +51,10 @@ typedef struct {
     unsigned int rng;
 } RepeatPrevious;
 
+static inline int rp_has_query(const State* s) {
+    return (s->k == 0) || (s->tick + 1 >= s->k);
+}
+
 void add_log(RepeatPrevious* env) {
     env->log.score += env->state.episode_return;
     env->log.episode_return += env->state.episode_return;
@@ -65,9 +69,8 @@ void add_log(RepeatPrevious* env) {
 
 void refresh_observations(RepeatPrevious* env) {
     State* s = &env->state;
-    int has_query = (s->k == 0) || (s->tick + 1 >= s->k);
     env->observations[0] = env->state.current_suit;                  // Current suit
-    env->observations[1] = (unsigned char)has_query;                 // Query available?
+    env->observations[1] = (unsigned char)rp_has_query(s);           // Query available?
     env->observations[2] = env->include_prev_action
         ? env->state.previous_action
         : (unsigned char)0;                                          // previous action proxy
@@ -124,8 +127,7 @@ void c_step(RepeatPrevious* env) {
     }
 
     float reward = 0.0f;
-    int has_query = (s->k == 0) || (s->tick + 1 >= s->k);
-    if (has_query) {
+    if (rp_has_query(s)) {
         int query_idx = (s->k == 0) ? s->tick : s->tick + 1 - s->k;
         int target = (int)s->cards[query_idx];
         float reward_scale = 1.0f / (float)(s->num_cards - s->k);

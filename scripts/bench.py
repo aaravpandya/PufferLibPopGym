@@ -59,21 +59,24 @@ def load_backend(native_env: str):
     return backend
 
 
-def make_actions(rng: np.random.Generator, vec: Any, random_actions: bool) -> np.ndarray:
-    shape = (vec.total_agents, vec.num_atns)
-    if random_actions:
-        actions = np.zeros(shape, dtype=np.float32)
-        for head, high in enumerate(vec.act_sizes):
-            actions[:, head] = rng.integers(
-                0, int(high), size=vec.total_agents, dtype=np.int32
-            )
-        return actions
-    return np.zeros(shape, dtype=np.float32)
+def fill_random_actions(rng: np.random.Generator, vec: Any, actions: np.ndarray) -> None:
+    for head, high in enumerate(vec.act_sizes):
+        actions[:, head] = rng.integers(
+            0, int(high), size=vec.total_agents, dtype=np.int32
+        )
 
 
 def read_float_buffer(ptr: int, size: int) -> np.ndarray:
     array_type = ctypes.c_float * size
     return np.ctypeslib.as_array(array_type.from_address(ptr))
+
+
+def print_throughput(steps: int, elapsed: float, agent_steps: int) -> None:
+    print(f"elapsed_sec={elapsed:.6f}")
+    print(f"vec_steps_per_sec={steps / elapsed:,.1f}")
+    print(f"agent_steps_per_sec={agent_steps / elapsed:,.0f}")
+    print(f"million_agent_steps_per_sec={(agent_steps / elapsed) / 1_000_000:.3f}")
+    print(f"us_per_vec_step={(elapsed / steps) * 1_000_000:.2f}")
 
 
 def normalize_python_env_id(env_name: str) -> str:
@@ -121,37 +124,24 @@ def make_python_actions(
 def run_native(args: argparse.Namespace, rng: np.random.Generator) -> None:
     C = load_backend(args.native_env)
 
-    vec_args = {
-        "vec": {
-            "total_agents": args.total_agents,
-            "num_buffers": args.num_buffers,
-            "num_threads": args.num_threads,
-        },
-        "env": {
-            "num_decks": args.num_decks,
-            "k": args.k,
-            "include_prev_action": int(args.include_prev_action),
-            "include_antialias": int(args.include_antialias),
-        },
+    vec_cfg = {
+        "total_agents": args.total_agents,
+        "num_buffers": args.num_buffers,
+        "num_threads": args.num_threads,
+    }
+    env_cfg = {
+        "num_decks": args.num_decks,
+        "k": args.k,
+        "include_prev_action": int(args.include_prev_action),
+        "include_antialias": int(args.include_antialias),
     }
 
-    vec = C.create_vec(vec_args, 0)
+    vec = C.create_vec({"vec": vec_cfg, "env": env_cfg}, 0)
     vec.reset()
     try:
         print(f"env_name={C.env_name}")
-        print(
-            "vec="
-            f"total_agents={vec.total_agents} "
-            f"num_buffers={args.num_buffers} "
-            f"num_threads={args.num_threads}"
-        )
-        print(
-            "env="
-            f"num_decks={args.num_decks} "
-            f"k={args.k} "
-            f"include_prev_action={int(args.include_prev_action)} "
-            f"include_antialias={int(args.include_antialias)}"
-        )
+        print("vec=" + " ".join(f"{k}={v}" for k, v in vec_cfg.items()))
+        print("env=" + " ".join(f"{k}={v}" for k, v in env_cfg.items()))
         print(
             "spaces="
             f"obs_size={vec.obs_size} "
@@ -160,16 +150,18 @@ def run_native(args: argparse.Namespace, rng: np.random.Generator) -> None:
             f"act_sizes={list(vec.act_sizes)}"
         )
 
-        actions = make_actions(rng, vec, args.random_actions)
+        actions = np.zeros((vec.total_agents, vec.num_atns), dtype=np.float32)
+        if args.random_actions:
+            fill_random_actions(rng, vec, actions)
         for _ in range(args.warmup_steps):
             if args.random_actions:
-                actions[:] = make_actions(rng, vec, True)
+                fill_random_actions(rng, vec, actions)
             vec.cpu_step(actions.ctypes.data)
 
         t0 = perf_counter()
         for _ in range(args.steps):
             if args.random_actions:
-                actions[:] = make_actions(rng, vec, True)
+                fill_random_actions(rng, vec, actions)
             vec.cpu_step(actions.ctypes.data)
         elapsed = perf_counter() - t0
 
@@ -177,11 +169,7 @@ def run_native(args: argparse.Namespace, rng: np.random.Generator) -> None:
         rewards = read_float_buffer(vec.rewards_ptr, vec.total_agents)
         terminals = read_float_buffer(vec.terminals_ptr, vec.total_agents)
 
-        print(f"elapsed_sec={elapsed:.6f}")
-        print(f"vec_steps_per_sec={args.steps / elapsed:,.1f}")
-        print(f"agent_steps_per_sec={agent_steps / elapsed:,.0f}")
-        print(f"million_agent_steps_per_sec={(agent_steps / elapsed) / 1_000_000:.3f}")
-        print(f"us_per_vec_step={(elapsed / args.steps) * 1_000_000:.2f}")
+        print_throughput(args.steps, elapsed, agent_steps)
         print(f"reward_mean_last_step={float(rewards.mean()):.6f}")
         print(f"terminals_last_step={int(terminals.sum())}")
 
@@ -228,11 +216,7 @@ def run_python(args: argparse.Namespace, rng: np.random.Generator) -> None:
         agent_steps = args.total_agents * args.steps
         done = np.logical_or(terminals, truncations)
 
-        print(f"elapsed_sec={elapsed:.6f}")
-        print(f"vec_steps_per_sec={args.steps / elapsed:,.1f}")
-        print(f"agent_steps_per_sec={agent_steps / elapsed:,.0f}")
-        print(f"million_agent_steps_per_sec={(agent_steps / elapsed) / 1_000_000:.3f}")
-        print(f"us_per_vec_step={(elapsed / args.steps) * 1_000_000:.2f}")
+        print_throughput(args.steps, elapsed, agent_steps)
         print(f"reward_mean_last_step={float(np.mean(rewards)):.6f}")
         print(f"terminals_last_step={int(np.sum(terminals))}")
         print(f"truncations_last_step={int(np.sum(truncations))}")

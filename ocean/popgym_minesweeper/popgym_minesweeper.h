@@ -15,6 +15,10 @@
 #define MS_CLEAR 0
 #define MS_MINE 1
 #define MS_VIEWED 2
+#define MS_MAX_STEPS (MS_CELLS - MS_MINES)
+#define MS_SUCCESS_REWARD (1.0f / (float)MS_MAX_STEPS)
+#define MS_FAIL_REWARD (-0.5f - MS_SUCCESS_REWARD)
+#define MS_BAD_ACTION_REWARD (-0.5f / (float)(MS_MAX_STEPS - 2))
 
 typedef struct {
     float score;
@@ -58,13 +62,12 @@ void refresh_observations(PopGymMineSweeper* env, unsigned char obs) {
 }
 
 void add_log(PopGymMineSweeper* env, bool success) {
-    const int max_episode_length = MS_CELLS - MS_MINES;
     env->log.score += success ? 1.0f : 0.0f;
     env->log.success += success ? 1.0f : 0.0f;
     env->log.episode_return += env->state.episode_return;
     env->log.episode_length += (float)env->state.tick;
     env->log.invalid_action_rate += (float)env->state.invalid_actions
-        / (float)(env->state.tick > 0 ? env->state.tick : max_episode_length);
+        / (float)(env->state.tick > 0 ? env->state.tick : MS_MAX_STEPS);
     env->log.n += 1.0f;
 }
 
@@ -118,10 +121,6 @@ void c_step(PopGymMineSweeper* env) {
     State* s = &env->state;
     int row = (int)env->actions[0];
     int col = (int)env->actions[1];
-    const int max_episode_length = MS_CELLS - MS_MINES;
-    const float success_reward = 1.0f / (float)max_episode_length;
-    const float fail_reward = -0.5f - success_reward;
-    const float bad_action_reward = -0.5f / (float)(max_episode_length - 2);
 
     bool terminal = false;
     bool success = false;
@@ -130,28 +129,28 @@ void c_step(PopGymMineSweeper* env) {
 
     if (!ms_in_bounds(row, col)) {
         s->invalid_actions += 1;
-        reward = bad_action_reward;
+        reward = MS_BAD_ACTION_REWARD;
     } else {
         int idx = ms_index(row, col);
         obs = s->neighbor_grid[idx];
         if (s->hidden_grid[idx] == MS_MINE) {
             terminal = true;
-            reward = fail_reward;
+            reward = MS_FAIL_REWARD;
         } else if (s->hidden_grid[idx] == MS_VIEWED) {
-            reward = bad_action_reward;
+            reward = MS_BAD_ACTION_REWARD;
         } else {
             s->hidden_grid[idx] = MS_VIEWED;
             s->viewed_clear += 1;
-            reward = success_reward;
+            reward = MS_SUCCESS_REWARD;
         }
     }
 
     s->tick += 1;
-    if (s->viewed_clear == max_episode_length) {
+    if (s->viewed_clear == MS_MAX_STEPS) {
         terminal = true;
         success = true;
     }
-    if (s->tick == max_episode_length && !terminal) {
+    if (s->tick == MS_MAX_STEPS && !terminal) {
         terminal = true;
     }
 

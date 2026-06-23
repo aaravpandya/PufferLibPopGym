@@ -35,25 +35,13 @@ while [ $# -gt 0 ]; do
         --cpu)   MODE=cpu; PRECISION="-DPRECISION_FLOAT" ;;
         --module-name)
             shift
-            if [ -z "$1" ]; then
-                echo "Error: --module-name requires a value"
-                exit 1
-            fi
+            [ -z "$1" ] && echo "Error: --module-name requires a value" && exit 1
             MODULE_NAME="$1"
-            ;;
-        --module-name=*)
-            MODULE_NAME="${arg#--module-name=}"
             ;;
         --output-dir)
             shift
-            if [ -z "$1" ]; then
-                echo "Error: --output-dir requires a value"
-                exit 1
-            fi
+            [ -z "$1" ] && echo "Error: --output-dir requires a value" && exit 1
             OUTPUT_DIR="$1"
-            ;;
-        --output-dir=*)
-            OUTPUT_DIR="${arg#--output-dir=}"
             ;;
         *) echo "Error: unknown argument '$arg'" && exit 1 ;;
     esac
@@ -182,10 +170,9 @@ if [ "$ENV" = "osrs_inferno" ]; then
 fi
 
 CPU_STUB_INCLUDE=()
-if [ "$MODE" = "cpu" ] && [ -d "$SRC_DIR/cpu_stubs" ]; then
-    CPU_STUB_INCLUDE=(-I"$SRC_DIR/cpu_stubs" -I./src/cpu_stubs)
-elif [ "$MODE" = "cpu" ]; then
+if [ "$MODE" = "cpu" ]; then
     CPU_STUB_INCLUDE=(-I./src/cpu_stubs)
+    [ -d "$SRC_DIR/cpu_stubs" ] && CPU_STUB_INCLUDE+=(-I"$SRC_DIR/cpu_stubs")
 fi
 
 NVCC_ENV_HOST_FLAGS=()
