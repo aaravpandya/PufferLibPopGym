@@ -5,6 +5,7 @@ set -e
 #   ./build.sh breakout              # Build _C.so with breakout statically linked
 #   ./build.sh breakout --float      # float32 precision (required for --slowly)
 #   ./build.sh breakout --cpu        # CPU fallback, torch only
+#   ./build.sh breakout --cpu --module-name _C_breakout --output-dir pufferlib/native
 #   ./build.sh breakout --debug      # Debug build
 #   ./build.sh breakout --local      # Standalone executable (debug, sanitizers)
 #   ./build.sh breakout --fast       # Standalone executable (optimized)
@@ -13,13 +14,17 @@ set -e
 #   ./build.sh all                   # Build all envs with default and --float
 
 if [ -z "$1" ]; then
-    echo "Usage: ./build.sh ENV_NAME [--float] [--debug] [--local|--fast|--web|--profile|--cpu|--all]"
+    echo "Usage: ./build.sh ENV_NAME [--float] [--debug] [--local|--fast|--web|--profile|--cpu|--all] [--module-name NAME] [--output-dir DIR]"
     exit 1
 fi
 ENV=$1
 shift
 
-for arg in "$@"; do
+MODULE_NAME="_C"
+OUTPUT_DIR="pufferlib"
+
+while [ $# -gt 0 ]; do
+    arg="$1"
     case $arg in
         --float) PRECISION="-DPRECISION_FLOAT" ;;
         --debug) DEBUG=1 ;;
@@ -28,8 +33,31 @@ for arg in "$@"; do
         --web)   MODE=web ;;
         --profile) MODE=profile ;;
         --cpu)   MODE=cpu; PRECISION="-DPRECISION_FLOAT" ;;
+        --module-name)
+            shift
+            if [ -z "$1" ]; then
+                echo "Error: --module-name requires a value"
+                exit 1
+            fi
+            MODULE_NAME="$1"
+            ;;
+        --module-name=*)
+            MODULE_NAME="${arg#--module-name=}"
+            ;;
+        --output-dir)
+            shift
+            if [ -z "$1" ]; then
+                echo "Error: --output-dir requires a value"
+                exit 1
+            fi
+            OUTPUT_DIR="$1"
+            ;;
+        --output-dir=*)
+            OUTPUT_DIR="${arg#--output-dir=}"
+            ;;
         *) echo "Error: unknown argument '$arg'" && exit 1 ;;
     esac
+    shift
 done
 
 if [ "$ENV" = "all" ]; then
@@ -271,7 +299,8 @@ PYTHON_INCLUDE=$("$PYTHON_BIN" -c "import sysconfig; print(sysconfig.get_path('i
 PYBIND_INCLUDE=$("$PYTHON_BIN" -c "import pybind11; print(pybind11.get_include())")
 NUMPY_INCLUDE=$("$PYTHON_BIN" -c "import numpy; print(numpy.get_include())")
 EXT_SUFFIX=$("$PYTHON_BIN" -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
-OUTPUT="pufferlib/_C${EXT_SUFFIX}"
+mkdir -p "$OUTPUT_DIR"
+OUTPUT="$OUTPUT_DIR/${MODULE_NAME}${EXT_SUFFIX}"
 
 BINDING_SRC="$SRC_DIR/binding.c"
 mkdir -p build
@@ -290,6 +319,7 @@ if [ "$MODE" = "cpu" ]; then
         "${CPU_STUB_INCLUDE[@]}" \
         -I./$RAYLIB_NAME/include -I$CUDA_HOME/include \
         -DPLATFORM_DESKTOP \
+        -DPUFFER_PYTHON_EXTENSION \
         -fno-semantic-interposition -fvisibility=hidden \
         -fPIC "${OMP_CFLAGS[@]}" \
         "$BINDING_SRC" -o "$STATIC_OBJ"
@@ -312,6 +342,8 @@ if [ -z "$MODE" ]; then
         -Xcompiler=-fdata-sections \
         -DENV_BINDING_SRC=\"$BINDING_SRC\" \
         -DENV_NAME=$ENV \
+        -DPUFFER_MODULE_NAME=$MODULE_NAME \
+        -DPUFFER_PYTHON_EXTENSION \
         $PRECISION $NVCC_OPT \
         src/bindings.cu -o build/bindings.o
 
@@ -338,6 +370,7 @@ elif [ "$MODE" = "cpu" ]; then
         -I$PYTHON_INCLUDE -I$PYBIND_INCLUDE \
         "${OMP_CFLAGS[@]}" \
         -DENV_NAME=$ENV \
+        -DPUFFER_MODULE_NAME=$MODULE_NAME \
         $PRECISION $LINK_OPT \
         src/bindings_cpu.cpp -o build/bindings_cpu.o
     LINK_CMD=(

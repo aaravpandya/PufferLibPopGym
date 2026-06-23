@@ -12,6 +12,9 @@
 
 #define _PUFFER_STRINGIFY(x) #x
 #define PUFFER_STRINGIFY(x) _PUFFER_STRINGIFY(x)
+#ifndef PUFFER_MODULE_NAME
+#define PUFFER_MODULE_NAME _C
+#endif
 
 namespace py = pybind11;
 
@@ -482,7 +485,7 @@ std::unique_ptr<PuffeRL> create_pufferl(py::dict args) {
     return pufferl;
 }
 
-PYBIND11_MODULE(_C, m) {
+PYBIND11_MODULE(PUFFER_MODULE_NAME, m) {
     // Multi-GPU: generate NCCL unique ID (call on rank 0, pass bytes to all ranks)
     m.def("get_nccl_id", []() {
         ncclUniqueId id;
@@ -546,12 +549,12 @@ PYBIND11_MODULE(_C, m) {
     m.def("num_envs", &py_num_envs);
     m.def("python_vec_recv", &python_vec_recv);
     m.def("python_vec_send", &python_vec_send);
-    py::class_<Policy>(m, "Policy");
-    py::class_<Muon>(m, "Muon");
-    py::class_<Allocator>(m, "Allocator")
+    py::class_<Policy>(m, "Policy", py::module_local());
+    py::class_<Muon>(m, "Muon", py::module_local());
+    py::class_<Allocator>(m, "Allocator", py::module_local())
         .def(py::init<>());
 
-    py::class_<HypersT>(m, "HypersT")
+    py::class_<HypersT>(m, "HypersT", py::module_local())
         .def_readwrite("horizon", &HypersT::horizon)
         .def_readwrite("total_agents", &HypersT::total_agents)
         .def_readwrite("num_buffers", &HypersT::num_buffers)
@@ -594,16 +597,16 @@ PYBIND11_MODULE(_C, m) {
         .def_readwrite("gpu_id", &HypersT::gpu_id)
         .def_readwrite("nccl_id", &HypersT::nccl_id);
 
-    py::class_<PrecisionTensor>(m, "PrecisionTensor")
+    py::class_<PrecisionTensor>(m, "PrecisionTensor", py::module_local())
         .def("__repr__", [](const PrecisionTensor& t) { return std::string(puf_repr(&t)); })
         .def("ndim", [](const PrecisionTensor& t) { return ndim(t.shape); })
         .def("numel", [](const PrecisionTensor& t) { return numel(t.shape); });
-    py::class_<FloatTensor>(m, "FloatTensor")
+    py::class_<FloatTensor>(m, "FloatTensor", py::module_local())
         .def("__repr__", [](const FloatTensor& t) { return std::string(puf_repr(&t)); })
         .def("ndim", [](const FloatTensor& t) { return ndim(t.shape); })
         .def("numel", [](const FloatTensor& t) { return numel(t.shape); });
 
-    py::class_<RolloutBuf>(m, "RolloutBuf")
+    py::class_<RolloutBuf>(m, "RolloutBuf", py::module_local())
         .def_readwrite("observations", &RolloutBuf::observations)
         .def_readwrite("actions", &RolloutBuf::actions)
         .def_readwrite("values", &RolloutBuf::values)
@@ -620,7 +623,7 @@ PYBIND11_MODULE(_C, m) {
     });
     m.def("puff_advantage", &py_puff_advantage);
     m.def("create_vec", &create_vec, py::arg("args"), py::arg("gpu") = 1);
-    py::class_<VecEnv, std::unique_ptr<VecEnv>>(m, "VecEnv")
+    py::class_<VecEnv, std::unique_ptr<VecEnv>>(m, "VecEnv", py::module_local())
         .def_readonly("total_agents",  &VecEnv::total_agents)
         .def_readonly("obs_size",      &VecEnv::obs_size)
         .def_readonly("num_atns",      &VecEnv::num_atns)
@@ -644,7 +647,7 @@ PYBIND11_MODULE(_C, m) {
         .def("close", &vec_close);
 
     m.def("create_pufferl", &create_pufferl);
-    py::class_<PuffeRL, std::unique_ptr<PuffeRL>>(m, "PuffeRL")
+    py::class_<PuffeRL, std::unique_ptr<PuffeRL>>(m, "PuffeRL", py::module_local())
         .def_readwrite("policy", &PuffeRL::policy)
         .def_readwrite("muon", &PuffeRL::muon)
         .def_readwrite("hypers", &PuffeRL::hypers)

@@ -25,6 +25,7 @@ dependencies = [
     "scikit-learn",
     "wandb",
     "pybind11",
+    "popgym>=1.0.7",
 ]
 
 [project.scripts]
@@ -36,6 +37,9 @@ Homepage = "https://puffer.ai"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pufferlib*"]
+
+[tool.setuptools.package-data]
+"pufferlib.native" = ["*.so", "*.pyd", "*.dylib"]
 
 [build-system]
 requires = ["setuptools"]

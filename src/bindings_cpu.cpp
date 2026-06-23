@@ -5,6 +5,9 @@
 
 #define _PUFFER_STRINGIFY(x) #x
 #define PUFFER_STRINGIFY(x) _PUFFER_STRINGIFY(x)
+#ifndef PUFFER_MODULE_NAME
+#define PUFFER_MODULE_NAME _C
+#endif
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -248,7 +251,7 @@ static void vec_close(VecEnv& ve) {
 // Module
 // ============================================================================
 
-PYBIND11_MODULE(_C, m) {
+PYBIND11_MODULE(PUFFER_MODULE_NAME, m) {
     m.attr("precision_bytes") = 4;
     m.attr("env_name") = PUFFER_STRINGIFY(ENV_NAME);
     m.attr("gpu") = 0;
@@ -256,7 +259,7 @@ PYBIND11_MODULE(_C, m) {
     m.def("puff_advantage_cpu", &py_puff_advantage_cpu);
     m.def("create_vec", &create_vec, py::arg("args"), py::arg("gpu") = 0);
 
-    py::class_<VecEnv, std::unique_ptr<VecEnv>>(m, "VecEnv")
+    py::class_<VecEnv, std::unique_ptr<VecEnv>>(m, "VecEnv", py::module_local())
         .def_readonly("total_agents", &VecEnv::total_agents)
         .def_readonly("obs_size", &VecEnv::obs_size)
         .def_readonly("num_atns", &VecEnv::num_atns)
