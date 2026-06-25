@@ -109,6 +109,16 @@ else
     SHARED_LDFLAGS=(-framework Cocoa -framework OpenGL -framework IOKit -undefined dynamic_lookup)
 fi
 
+if [ "${PUFFER_NO_OPENMP:-}" = "1" ]; then
+    OMP_LIB=
+    OMP_CFLAGS=()
+    if [ "$PLATFORM" != "Linux" ] && [ -n "${LLVM_PREFIX:-}" ]; then
+        OMP_LDFLAGS=(-L"$LLVM_PREFIX/lib/c++" -Wl,-rpath,"$LLVM_PREFIX/lib/c++")
+    else
+        OMP_LDFLAGS=()
+    fi
+fi
+
 CLANG_WARN=(
     -Wall
     -ferror-limit=3
