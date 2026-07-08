@@ -1,5 +1,7 @@
 // Native POPGym CountRecall default/Easy colors semantics.
 
+#pragma once
+
 #include <assert.h>
 #include <stdlib.h>
 #ifndef PUFFER_PYTHON_EXTENSION
@@ -18,6 +20,10 @@
 #define CR_MAX_COUNT (CR_DECK_SIZE / CR_NUM_VALUES)
 #define CR_NUM_ACTIONS (CR_MAX_COUNT + 1)
 #define CR_EPISODE_LENGTH (CR_DECK_SIZE - 1)
+
+static_assert(CR_NUM_VALUES >= 1 && CR_DECK_SIZE >= 2, "deck must be non-trivial");
+static_assert(CR_DECK_SIZE % CR_NUM_VALUES == 0,
+    "each value must appear the same number of times so counts fit the action space");
 
 typedef struct {
     float score;

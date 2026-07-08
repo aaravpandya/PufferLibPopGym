@@ -1,14 +1,18 @@
 #include "popgym_velocity_only_cartpole.h"
 #include "raylib.h"
 
+#ifndef VOC_ALIAS_MAX_EPISODE_LENGTH
+#define VOC_ALIAS_MAX_EPISODE_LENGTH 200
+#endif
+
 int main(void) {
     VelocityOnlyCartPole env = {0};
     env.num_agents = 1;
-    env.max_episode_length = 200;
+    env.max_episode_length = VOC_ALIAS_MAX_EPISODE_LENGTH;
     env.rng = 42;
 
     init(&env);
-    env.observations = (float*)calloc(VOC_OBS_SIZE, sizeof(float));
+    env.observations = (float*)calloc(CARTPOLE_OBS_SIZE, sizeof(float));
     env.actions = (float*)calloc(1, sizeof(float));
     env.rewards = (float*)calloc(1, sizeof(float));
     env.terminals = (float*)calloc(1, sizeof(float));

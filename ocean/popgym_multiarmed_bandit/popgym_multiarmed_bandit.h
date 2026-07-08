@@ -1,5 +1,7 @@
 // Native POPGym MultiarmedBandit default/Easy semantics.
 
+#pragma once
+
 #include <assert.h>
 #include <stdlib.h>
 #ifndef PUFFER_PYTHON_EXTENSION
@@ -12,6 +14,9 @@
 #ifndef MB_EPISODE_LENGTH
 #define MB_EPISODE_LENGTH 200
 #endif
+
+static_assert(MB_NUM_BANDITS >= 1, "at least one bandit required");
+static_assert(MB_EPISODE_LENGTH >= 1, "episode length must be positive");
 
 typedef struct {
     float score;

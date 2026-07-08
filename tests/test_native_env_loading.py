@@ -1,108 +1,61 @@
-import ctypes
-
 import numpy as np
 import pytest
 
-from pufferlib.native_envs import load_native_env
+from pufferlib.native_envs import available_native_envs, load_native_env
 
-
-NATIVE_POPGYM_ENVS = (
-    "popgym_autoencode",
-    "popgym_autoencode_easy",
-    "popgym_autoencode_hard",
-    "popgym_autoencode_medium",
-    "popgym_battleship",
-    "popgym_battleship_easy",
-    "popgym_battleship_hard",
-    "popgym_battleship_medium",
-    "popgym_concentration",
-    "popgym_concentration_easy",
-    "popgym_concentration_hard",
-    "popgym_concentration_medium",
-    "popgym_count_recall",
-    "popgym_count_recall_easy",
-    "popgym_count_recall_hard",
-    "popgym_count_recall_medium",
-    "popgym_higher_lower",
-    "popgym_higher_lower_easy",
-    "popgym_higher_lower_hard",
-    "popgym_higher_lower_medium",
-    "popgym_minesweeper",
-    "popgym_minesweeper_easy",
-    "popgym_minesweeper_hard",
-    "popgym_minesweeper_medium",
-    "popgym_multiarmed_bandit",
-    "popgym_multiarmed_bandit_easy",
-    "popgym_multiarmed_bandit_hard",
-    "popgym_multiarmed_bandit_medium",
-    "popgym_noisy_position_only_cartpole",
-    "popgym_noisy_position_only_cartpole_easy",
-    "popgym_noisy_position_only_cartpole_hard",
-    "popgym_noisy_position_only_cartpole_medium",
-    "popgym_noisy_position_only_pendulum",
-    "popgym_noisy_position_only_pendulum_easy",
-    "popgym_noisy_position_only_pendulum_hard",
-    "popgym_noisy_position_only_pendulum_medium",
-    "popgym_position_only_cartpole",
-    "popgym_position_only_cartpole_easy",
-    "popgym_position_only_cartpole_hard",
-    "popgym_position_only_cartpole_medium",
-    "popgym_position_only_pendulum",
-    "popgym_position_only_pendulum_easy",
-    "popgym_position_only_pendulum_hard",
-    "popgym_position_only_pendulum_medium",
-    "popgym_repeat_first",
-    "popgym_repeat_first_easy",
-    "popgym_repeat_first_hard",
-    "popgym_repeat_first_medium",
-    "popgym_repeat_previous",
-    "popgym_repeat_previous_easy",
-    "popgym_repeat_previous_hard",
-    "popgym_repeat_previous_medium",
-    "popgym_velocity_only_cartpole",
-    "popgym_velocity_only_cartpole_easy",
-    "popgym_velocity_only_cartpole_hard",
-    "popgym_velocity_only_cartpole_medium",
+from tests.popgym_helpers import (
+    native_popgym_env_names,
+    obs_array,
+    rewards_array,
+    terminals_array,
+    vec_for,
 )
 
 
-def _load_or_skip(env_name):
+NATIVE_POPGYM_ENVS = native_popgym_env_names()
+
+
+def test_env_list_is_derived_from_ocean_layout():
+    assert len(NATIVE_POPGYM_ENVS) >= 56
+    for family in (
+        "popgym_autoencode",
+        "popgym_battleship",
+        "popgym_higher_lower",
+        "popgym_minesweeper",
+        "popgym_repeat_previous",
+    ):
+        for suffix in ("", "_easy", "_medium", "_hard"):
+            assert family + suffix in NATIVE_POPGYM_ENVS
+
+
+@pytest.mark.parametrize("env_name", NATIVE_POPGYM_ENVS)
+def test_load_native_env_reports_matching_name(env_name):
     try:
-        return load_native_env(env_name)
+        module = load_native_env(env_name)
     except ModuleNotFoundError as exc:
         pytest.skip(str(exc))
+    assert module.env_name == env_name
 
 
 def test_load_popgym_envs_side_by_side():
-    modules = [_load_or_skip(env_name) for env_name in NATIVE_POPGYM_ENVS]
+    available = available_native_envs(list(NATIVE_POPGYM_ENVS))
+    if len(available) < 2:
+        pytest.skip("needs at least two built native popgym modules")
 
-    assert [module.env_name for module in modules] == list(NATIVE_POPGYM_ENVS)
+    modules = [load_native_env(env_name) for env_name in available]
+    assert [module.env_name for module in modules] == available
     assert len({id(module) for module in modules}) == len(modules)
 
 
 def test_native_minesweeper_smoke():
-    C = _load_or_skip("popgym_minesweeper")
-    args = {
-        "vec": {"total_agents": 16, "num_buffers": 1, "num_threads": 1},
-        "env": {"difficulty": 0},
-    }
-
-    vec = C.create_vec(args, 0)
-    vec.reset()
-    try:
+    with vec_for("popgym_minesweeper", total_agents=16) as vec:
         assert vec.obs_size == 1
         assert vec.num_atns == 2
         assert list(vec.act_sizes) == [4, 4]
 
-        obs = np.ctypeslib.as_array(
-            (ctypes.c_ubyte * (vec.total_agents * vec.obs_size)).from_address(vec.obs_ptr)
-        ).reshape(vec.total_agents, vec.obs_size)
-        rewards = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.rewards_ptr)
-        )
-        terminals = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.terminals_ptr)
-        )
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         actions = np.zeros((vec.total_agents, vec.num_atns), dtype=np.float32)
 
         vec.cpu_step(actions.ctypes.data)
@@ -112,5 +65,3 @@ def test_native_minesweeper_smoke():
         assert np.all(obs <= 2)
         assert rewards.shape == (vec.total_agents,)
         assert terminals.shape == (vec.total_agents,)
-    finally:
-        vec.close()

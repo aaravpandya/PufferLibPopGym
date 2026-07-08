@@ -1,50 +1,18 @@
-import ctypes
-
 import numpy as np
 import pytest
 
-
-def _skip_if_wrong_env():
-    try:
-        import pufferlib._C as C
-    except Exception as exc:
-        pytest.skip(f"pufferlib._C unavailable or build required: {exc}")
-
-    if C.env_name != "popgym_multiarmed_bandit":
-        pytest.skip(
-            "Build the target env first: "
-            "PYTHON=.venv/bin/python ./build.sh popgym_multiarmed_bandit --cpu"
-        )
-    return C
-
-
-def _make_vec(total_agents=1):
-    C = _skip_if_wrong_env()
-    args = {
-        "vec": {"total_agents": total_agents, "num_buffers": 1, "num_threads": 1},
-        "env": {},
-    }
-    vec = C.create_vec(args, 0)
-    vec.reset()
-    return vec
+from tests.popgym_helpers import obs_array, rewards_array, terminals_array, vec_for
 
 
 def test_multiarmed_bandit_smoke():
-    vec = _make_vec(total_agents=16)
-    try:
+    with vec_for("popgym_multiarmed_bandit", total_agents=16) as vec:
         assert vec.obs_size == 1
         assert vec.num_atns == 1
         assert list(vec.act_sizes) == [10]
 
-        obs = np.ctypeslib.as_array(
-            (ctypes.c_ubyte * (vec.total_agents * vec.obs_size)).from_address(vec.obs_ptr)
-        ).reshape(vec.total_agents, vec.obs_size)
-        rewards = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.rewards_ptr)
-        )
-        terminals = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.terminals_ptr)
-        )
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         actions = np.random.randint(0, 10, size=(vec.total_agents, 1)).astype(np.float32)
 
         for _ in range(40):
@@ -54,16 +22,13 @@ def test_multiarmed_bandit_smoke():
             assert np.all((obs == 0) | (obs == 1))
             assert np.allclose(np.abs(rewards), 1.0 / 200.0)
             assert np.all(terminals == 0.0)
-    finally:
-        vec.close()
 
 
 def test_multiarmed_bandit_terminal_step_preserves_reward():
-    vec = _make_vec()
-    try:
-        obs = np.ctypeslib.as_array((ctypes.c_ubyte * vec.obs_size).from_address(vec.obs_ptr))
-        rewards = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.rewards_ptr))
-        terminals = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.terminals_ptr))
+    with vec_for("popgym_multiarmed_bandit") as vec:
+        obs = obs_array(vec)[0]
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         action = np.zeros((1, 1), dtype=np.float32)
 
         assert obs[0] == 0
@@ -75,5 +40,3 @@ def test_multiarmed_bandit_terminal_step_preserves_reward():
                 break
         else:
             pytest.fail("episode did not terminate after 200 steps")
-    finally:
-        vec.close()

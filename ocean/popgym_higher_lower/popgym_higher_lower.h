@@ -1,8 +1,10 @@
 // Native POPGym HigherLower semantics.
 // Action 0 guesses the next rank is higher; action 1 guesses lower.
 
-#include <assert.h>
+#pragma once
+
 #include <stdlib.h>
+#include "../popgym_check.h"
 #ifndef PUFFER_PYTHON_EXTENSION
 #include "raylib.h"
 #endif
@@ -20,6 +22,9 @@ typedef struct {
     float n;
 } Log;
 
+// State is snapshotted/restored by struct assignment in the GPU state
+// curriculum, so it must stay copyable: the owned card buffer lives on the
+// env, not in State.
 typedef struct {
     int tick;
     int num_cards;
@@ -28,7 +33,6 @@ typedef struct {
     int non_tie_predictions;
     int invalid_actions;
     unsigned char current_rank;
-    unsigned char* cards;
     float episode_return;
 } State;
 
@@ -40,6 +44,7 @@ typedef struct {
     float* terminals;
     int num_agents;
     State state;
+    unsigned char* cards;
     int num_decks;
     unsigned int rng;
 } HigherLower;
@@ -62,15 +67,17 @@ void add_log(HigherLower* env) {
 }
 
 void init(HigherLower* env) {
-    assert(env->num_decks >= 1);
+    POPGYM_CHECK(env->num_decks >= 1,
+        "num_decks must be >= 1 (got %d)", env->num_decks);
 
     env->state.num_cards = env->num_decks * HL_DECK_SIZE;
     env->state.episode_length = env->state.num_cards - 1;
-    env->state.cards = (unsigned char*)realloc(
-        env->state.cards,
+    env->cards = (unsigned char*)realloc(
+        env->cards,
         (size_t)env->state.num_cards * sizeof(unsigned char)
     );
-    assert(env->state.cards != NULL);
+    POPGYM_CHECK(env->cards != NULL,
+        "out of memory allocating %d cards", env->state.num_cards);
 }
 
 void c_reset(HigherLower* env) {
@@ -82,16 +89,16 @@ void c_reset(HigherLower* env) {
     s->episode_return = 0.0f;
 
     for (int i = 0; i < s->num_cards; i++) {
-        s->cards[i] = (unsigned char)((i / HL_SUITS_PER_RANK) % HL_NUM_RANKS);
+        env->cards[i] = (unsigned char)((i / HL_SUITS_PER_RANK) % HL_NUM_RANKS);
     }
     for (int i = s->num_cards - 1; i > 0; i--) {
         int j = (int)(rand_r(&env->rng) % (unsigned int)(i + 1));
-        unsigned char tmp = s->cards[i];
-        s->cards[i] = s->cards[j];
-        s->cards[j] = tmp;
+        unsigned char tmp = env->cards[i];
+        env->cards[i] = env->cards[j];
+        env->cards[j] = tmp;
     }
 
-    s->current_rank = s->cards[0];
+    s->current_rank = env->cards[0];
     refresh_observations(env);
 }
 
@@ -103,7 +110,7 @@ void c_step(HigherLower* env) {
         action = 0;
     }
 
-    unsigned char next_rank = s->cards[s->tick + 1];
+    unsigned char next_rank = env->cards[s->tick + 1];
     float reward = 0.0f;
     if (next_rank != s->current_rank) {
         int correct = (next_rank > s->current_rank) == (action == 0);
@@ -150,8 +157,8 @@ void c_render(HigherLower* env) {
 }
 
 void c_close(HigherLower* env) {
-    free(env->state.cards);
-    env->state.cards = NULL;
+    free(env->cards);
+    env->cards = NULL;
 #ifndef PUFFER_PYTHON_EXTENSION
     if (IsWindowReady()) {
         CloseWindow();

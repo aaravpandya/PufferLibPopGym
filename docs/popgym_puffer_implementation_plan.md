@@ -120,16 +120,20 @@ The binding file must define metadata before including `vecenv.h`:
 #define NUM_ATNS 1
 #define ACT_SIZES {4}
 #define OBS_TENSOR_T ByteTensor
-#define PUFFER_HAS_STATE 1
-#define PUFFER_STATE_REFRESH(env) compute_observations(env)
 
 #define Env RepeatPrevious
+// The GPU state curriculum (src/curriculum.cu) calls this hook by name after
+// restoring env->state; it must be an ordinary function, not a macro.
+static inline void puffer_state_refresh(Env* env) { refresh_observations(env); }
 #include "vecenv.h"
+#include "../popgym_kwargs.h"
 
 void my_init(Env* env, Dict* kwargs) {
     env->num_agents = 1;
-    env->num_decks = (int)dict_get(kwargs, "num_decks")->value;
-    env->k = (int)dict_get(kwargs, "k")->value;
+    // kwarg_or falls back to the base POPGym default when a kwarg is missing
+    // instead of crashing on dict_get's NULL.
+    env->num_decks = (int)kwarg_or(kwargs, "num_decks", 1);
+    env->k = (int)kwarg_or(kwargs, "k", 4);
     init(env);
 }
 

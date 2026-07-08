@@ -1,2 +1,2 @@
-#define AE_ALIAS_NUM_DECKS 1
-#include "../popgym_autoencode/alias_binding.h"
+#include "popgym_autoencode_easy.h"
+#include "../popgym_autoencode/binding.c"

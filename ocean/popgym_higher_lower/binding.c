@@ -4,15 +4,22 @@
 #define NUM_ATNS 1
 #define ACT_SIZES {2}
 #define OBS_TENSOR_T ByteTensor
-#define PUFFER_HAS_STATE 1
-#define PUFFER_STATE_REFRESH(env) refresh_observations(env)
 
 #define Env HigherLower
+static inline void puffer_state_refresh(Env* env) { refresh_observations(env); }
 #include "vecenv.h"
+#include "../popgym_kwargs.h"
 
 void my_init(Env* env, Dict* kwargs) {
     env->num_agents = 1;
-    env->num_decks = (int)dict_get(kwargs, "num_decks")->value;
+#ifdef HL_ALIAS_NUM_DECKS
+    popgym_ignore_kwargs(kwargs);
+    env->num_decks = HL_ALIAS_NUM_DECKS;
+#else
+    static const char* const known_kwargs[] = {"num_decks"};
+    popgym_require_known_kwargs(kwargs, known_kwargs, 1);
+    env->num_decks = (int)kwarg_or(kwargs, "num_decks", 1);
+#endif
     init(env);
 }
 

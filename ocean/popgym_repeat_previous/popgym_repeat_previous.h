@@ -1,8 +1,10 @@
 // A simple C env for the POPGym RepeatPrevious semantic task.
 // The agent sees a stream of suits [0..3] and predicts the suit from k steps ago.
 
+#pragma once
+
 #include <stdlib.h>
-#include <assert.h>
+#include "../popgym_check.h"
 #ifndef PUFFER_PYTHON_EXTENSION
 #include "raylib.h"
 #endif
@@ -19,6 +21,9 @@ typedef struct {
     float n; // number of episodes
 } Log;
 
+// State is snapshotted/restored by struct assignment in the GPU state
+// curriculum, so it must stay copyable: the owned card buffer lives on the
+// env, not in State.
 typedef struct {
     int tick;
     int num_cards;
@@ -29,7 +34,6 @@ typedef struct {
     int invalid_actions;
     unsigned char current_suit;
     unsigned char previous_action;
-    unsigned char* cards;
     float episode_return;
 } State;
 
@@ -41,6 +45,7 @@ typedef struct {
     float* terminals;
     int num_agents;
     State state;
+    unsigned char* cards;
 
     // Env controls
     int num_decks;
@@ -80,18 +85,22 @@ void refresh_observations(RepeatPrevious* env) {
 }
 
 void init(RepeatPrevious* env) {
-    assert(env->num_decks >= 1);
-    assert(env->k >= 0);
+    POPGYM_CHECK(env->num_decks >= 1,
+        "num_decks must be >= 1 (got %d)", env->num_decks);
+    POPGYM_CHECK(env->k >= 0, "k must be >= 0 (got %d)", env->k);
 
     env->state.num_cards = env->num_decks * DECK_SIZE;
-    assert(env->state.num_cards > env->k);
+    POPGYM_CHECK(env->state.num_cards > env->k,
+        "k (%d) must be smaller than the number of cards (%d)",
+        env->k, env->state.num_cards);
 
     env->state.episode_length = env->state.num_cards - 1;
-    env->state.cards = (unsigned char*)realloc(
-        env->state.cards,
+    env->cards = (unsigned char*)realloc(
+        env->cards,
         (size_t)env->state.num_cards * sizeof(unsigned char)
     );
-    assert(env->state.cards != NULL);
+    POPGYM_CHECK(env->cards != NULL,
+        "out of memory allocating %d cards", env->state.num_cards);
 }
 
 void c_reset(RepeatPrevious* env) {
@@ -105,16 +114,16 @@ void c_reset(RepeatPrevious* env) {
     s->episode_return = 0.0f;
 
     for (int i = 0; i < s->num_cards; i++) {
-        s->cards[i] = (unsigned char)(i % NUM_SUITS);
+        env->cards[i] = (unsigned char)(i % NUM_SUITS);
     }
     for (int i = s->num_cards - 1; i > 0; i--) {
         int j = (int)(rand_r(&env->rng) % (unsigned int)(i + 1));
-        unsigned char tmp = s->cards[i];
-        s->cards[i] = s->cards[j];
-        s->cards[j] = tmp;
+        unsigned char tmp = env->cards[i];
+        env->cards[i] = env->cards[j];
+        env->cards[j] = tmp;
     }
 
-    s->current_suit = s->cards[0];
+    s->current_suit = env->cards[0];
     refresh_observations(env);
 }
 
@@ -129,7 +138,7 @@ void c_step(RepeatPrevious* env) {
     float reward = 0.0f;
     if (rp_has_query(s)) {
         int query_idx = (s->k == 0) ? s->tick : s->tick + 1 - s->k;
-        int target = (int)s->cards[query_idx];
+        int target = (int)env->cards[query_idx];
         float reward_scale = 1.0f / (float)(s->num_cards - s->k);
         reward = (action == target) ? reward_scale : -reward_scale;
         s->correct_predictions += (action == target);
@@ -143,7 +152,7 @@ void c_step(RepeatPrevious* env) {
 
     s->tick += 1;
     if (s->tick < s->episode_length) {
-        s->current_suit = s->cards[s->tick];
+        s->current_suit = env->cards[s->tick];
         refresh_observations(env);
         return;
     }
@@ -176,8 +185,8 @@ void c_render(RepeatPrevious* env) {
 }
 
 void c_close(RepeatPrevious* env) {
-    free(env->state.cards);
-    env->state.cards = NULL;
+    free(env->cards);
+    env->cards = NULL;
 #ifndef PUFFER_PYTHON_EXTENSION
     if (IsWindowReady()) {
         CloseWindow();

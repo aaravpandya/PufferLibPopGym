@@ -1,17 +1,24 @@
 #include "popgym_repeat_previous.h"
 #include "raylib.h"
 
+#ifndef RP_ALIAS_NUM_DECKS
+#define RP_ALIAS_NUM_DECKS 1
+#endif
+#ifndef RP_ALIAS_K
+#define RP_ALIAS_K 4
+#endif
+
 int main(void) {
     RepeatPrevious env = {0};
     env.num_agents = 1;
-    env.num_decks = 1;
-    env.k = 4;
+    env.num_decks = RP_ALIAS_NUM_DECKS;
+    env.k = RP_ALIAS_K;
     env.include_prev_action = 1;
     env.include_antialias = 1;
     env.rng = 42;
 
     init(&env);
-    env.observations = (unsigned char*)calloc(OBS_SIZE, sizeof(unsigned char));
+    env.observations = (unsigned char*)calloc(4, sizeof(unsigned char));
     env.actions = (float*)calloc(1, sizeof(float));
     env.rewards = (float*)calloc(1, sizeof(float));
     env.terminals = (float*)calloc(1, sizeof(float));

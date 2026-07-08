@@ -2,13 +2,17 @@
 
 Each selected native env can be built as its own extension module, for example:
 
-    ./build.sh popgym_repeat_previous --cpu \
+    PUFFER_NO_OPENMP=1 ./build.sh popgym_repeat_previous --cpu \
         --module-name _C_popgym_repeat_previous \
         --output-dir pufferlib/native
 
 Then load it with:
 
     C = load_native_env("popgym_repeat_previous")
+
+PUFFER_NO_OPENMP=1 matters when the module shares a process with torch: torch
+bundles its own libomp, and loading a second OpenMP runtime aborts the process
+(OMP Error #15).
 """
 
 from __future__ import annotations
@@ -34,8 +38,8 @@ def load_native_env(env_name: str):
             raise
         raise ModuleNotFoundError(
             f"Native env {env_name!r} is not built. Build it with: "
-            f"./build.sh {env_name} --cpu --module-name _C_{env_name} "
-            "--output-dir pufferlib/native"
+            f"PUFFER_NO_OPENMP=1 ./build.sh {env_name} --cpu "
+            f"--module-name _C_{env_name} --output-dir pufferlib/native"
         ) from exc
 
     built_name = getattr(module, "env_name", None)

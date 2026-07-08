@@ -1,5 +1,7 @@
-// Native POPGym MineSweeperEasy semantics.
+// Native POPGym MineSweeper default/Easy semantics.
 // Observation is the adjacent mine count for the last selected square.
+
+#pragma once
 
 #include <assert.h>
 #include <stdbool.h>
@@ -26,6 +28,16 @@
 #define MS_FAIL_REWARD (-0.5f - MS_SUCCESS_REWARD)
 #define MS_BAD_ACTION_REWARD (-0.5f / (float)(MS_MAX_STEPS - 2))
 
+static_assert(MS_ROWS >= 1 && MS_COLS >= 1, "grid must be non-empty");
+static_assert(MS_MINES >= 1, "at least one mine required");
+static_assert(MS_MAX_STEPS > 2, "grid must have more than two clear cells");
+
+// Render layout: the window must fit the largest (hard, 8x8) grid.
+#define MS_RENDER_WIDTH_RAW (40 + MS_COLS * 42 + 20)
+#define MS_RENDER_WIDTH (MS_RENDER_WIDTH_RAW > 360 ? MS_RENDER_WIDTH_RAW : 360)
+#define MS_RENDER_HEIGHT_RAW (58 + MS_ROWS * 36 + 12)
+#define MS_RENDER_HEIGHT (MS_RENDER_HEIGHT_RAW > 260 ? MS_RENDER_HEIGHT_RAW : 260)
+
 typedef struct {
     float score;
     float episode_return;
@@ -39,6 +51,9 @@ typedef struct {
     int tick;
     int viewed_clear;
     int invalid_actions;
+    // Last published observation, kept in State so a snapshot restore can
+    // re-publish an observation consistent with the restored board.
+    unsigned char last_obs;
     unsigned char hidden_grid[MS_CELLS];
     unsigned char neighbor_grid[MS_CELLS];
     float episode_return;
@@ -64,6 +79,7 @@ static inline bool ms_in_bounds(int row, int col) {
 }
 
 void refresh_observations(PopGymMineSweeper* env, unsigned char obs) {
+    env->state.last_obs = obs;
     env->observations[0] = obs;
 }
 
@@ -177,7 +193,7 @@ void c_render(PopGymMineSweeper* env) {
     (void)env;
 #else
     if (!IsWindowReady()) {
-        InitWindow(360, 260, "PufferLib MineSweeperEasy");
+        InitWindow(MS_RENDER_WIDTH, MS_RENDER_HEIGHT, "PufferLib MineSweeper");
         SetTargetFPS(20);
     }
     if (IsKeyDown(KEY_ESCAPE)) {

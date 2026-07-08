@@ -1,18 +1,25 @@
 #include "popgym_position_only_cartpole.h"
 
-#define OBS_SIZE POC_OBS_SIZE
+#define OBS_SIZE CARTPOLE_OBS_SIZE
 #define NUM_ATNS 1
 #define ACT_SIZES {2}
 #define OBS_TENSOR_T FloatTensor
-#define PUFFER_HAS_STATE 1
-#define PUFFER_STATE_REFRESH(env) refresh_observations(env)
 
 #define Env PositionOnlyCartPole
+static inline void puffer_state_refresh(Env* env) { refresh_observations(env); }
 #include "vecenv.h"
+#include "../popgym_kwargs.h"
 
 void my_init(Env* env, Dict* kwargs) {
     env->num_agents = 1;
-    env->max_episode_length = (int)dict_get(kwargs, "max_episode_length")->value;
+#ifdef POC_ALIAS_MAX_EPISODE_LENGTH
+    popgym_ignore_kwargs(kwargs);
+    env->max_episode_length = POC_ALIAS_MAX_EPISODE_LENGTH;
+#else
+    static const char* const known_kwargs[] = {"max_episode_length"};
+    popgym_require_known_kwargs(kwargs, known_kwargs, 1);
+    env->max_episode_length = (int)kwarg_or(kwargs, "max_episode_length", 200);
+#endif
     init(env);
 }
 

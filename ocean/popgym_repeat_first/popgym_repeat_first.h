@@ -1,8 +1,10 @@
 // Native POPGym RepeatFirst semantics.
 // The agent must repeat the first observed suit for the rest of the deck.
 
-#include <assert.h>
+#pragma once
+
 #include <stdlib.h>
+#include "../popgym_check.h"
 #ifndef PUFFER_PYTHON_EXTENSION
 #include "raylib.h"
 #endif
@@ -19,6 +21,9 @@ typedef struct {
     float n;
 } Log;
 
+// State is snapshotted/restored by struct assignment in the GPU state
+// curriculum, so it must stay copyable: the owned card buffer lives on the
+// env, not in State.
 typedef struct {
     int tick;
     int num_cards;
@@ -27,7 +32,6 @@ typedef struct {
     int invalid_actions;
     unsigned char first_suit;
     unsigned char current_suit;
-    unsigned char* cards;
     float episode_return;
 } State;
 
@@ -39,6 +43,7 @@ typedef struct {
     float* terminals;
     int num_agents;
     State state;
+    unsigned char* cards;
     int num_decks;
     unsigned int rng;
 } RepeatFirst;
@@ -60,15 +65,17 @@ void refresh_observations(RepeatFirst* env) {
 }
 
 void init(RepeatFirst* env) {
-    assert(env->num_decks >= 1);
+    POPGYM_CHECK(env->num_decks >= 1,
+        "num_decks must be >= 1 (got %d)", env->num_decks);
 
     env->state.num_cards = env->num_decks * RF_DECK_SIZE;
     env->state.episode_length = env->state.num_cards - 1;
-    env->state.cards = (unsigned char*)realloc(
-        env->state.cards,
+    env->cards = (unsigned char*)realloc(
+        env->cards,
         (size_t)env->state.num_cards * sizeof(unsigned char)
     );
-    assert(env->state.cards != NULL);
+    POPGYM_CHECK(env->cards != NULL,
+        "out of memory allocating %d cards", env->state.num_cards);
 }
 
 void c_reset(RepeatFirst* env) {
@@ -79,16 +86,16 @@ void c_reset(RepeatFirst* env) {
     s->episode_return = 0.0f;
 
     for (int i = 0; i < s->num_cards; i++) {
-        s->cards[i] = (unsigned char)(i % RF_NUM_SUITS);
+        env->cards[i] = (unsigned char)(i % RF_NUM_SUITS);
     }
     for (int i = s->num_cards - 1; i > 0; i--) {
         int j = (int)(rand_r(&env->rng) % (unsigned int)(i + 1));
-        unsigned char tmp = s->cards[i];
-        s->cards[i] = s->cards[j];
-        s->cards[j] = tmp;
+        unsigned char tmp = env->cards[i];
+        env->cards[i] = env->cards[j];
+        env->cards[j] = tmp;
     }
 
-    s->first_suit = s->cards[0];
+    s->first_suit = env->cards[0];
     s->current_suit = s->first_suit;
     refresh_observations(env);
 }
@@ -110,7 +117,7 @@ void c_step(RepeatFirst* env) {
 
     s->tick += 1;
     if (s->tick < s->episode_length) {
-        s->current_suit = s->cards[s->tick];
+        s->current_suit = env->cards[s->tick];
         refresh_observations(env);
         return;
     }
@@ -145,8 +152,8 @@ void c_render(RepeatFirst* env) {
 }
 
 void c_close(RepeatFirst* env) {
-    free(env->state.cards);
-    env->state.cards = NULL;
+    free(env->cards);
+    env->cards = NULL;
 #ifndef PUFFER_PYTHON_EXTENSION
     if (IsWindowReady()) {
         CloseWindow();

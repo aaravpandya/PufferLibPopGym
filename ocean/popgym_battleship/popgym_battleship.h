@@ -1,5 +1,7 @@
 // Native POPGym Battleship default/Medium semantics.
 
+#pragma once
+
 #include <assert.h>
 #include <stdlib.h>
 #ifndef PUFFER_PYTHON_EXTENSION
@@ -14,6 +16,9 @@
 #define BS_NEEDED_HITS 12
 #define BS_HIT_REWARD (1.0f / (float)BS_NEEDED_HITS)
 #define BS_MISS_REWARD (-1.0f / (float)(BS_CELLS - BS_NEEDED_HITS))
+
+static_assert(BS_BOARD_SIZE >= 4, "board must fit the largest (size 4) ship");
+static_assert(BS_CELLS > BS_NEEDED_HITS, "board must have more cells than needed hits");
 
 static const int BS_SHIP_SIZES[BS_NUM_SHIPS] = {2, 3, 3, 4};
 

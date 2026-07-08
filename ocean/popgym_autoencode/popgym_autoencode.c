@@ -1,10 +1,14 @@
 #include "popgym_autoencode.h"
 #include "raylib.h"
 
+#ifndef AE_ALIAS_NUM_DECKS
+#define AE_ALIAS_NUM_DECKS 1
+#endif
+
 int main(void) {
     Autoencode env = {0};
     env.num_agents = 1;
-    env.num_decks = 1;
+    env.num_decks = AE_ALIAS_NUM_DECKS;
     env.rng = 42;
 
     init(&env);

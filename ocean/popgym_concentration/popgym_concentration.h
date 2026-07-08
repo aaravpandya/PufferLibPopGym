@@ -1,7 +1,10 @@
 // Native POPGym Concentration default/Hard ranks semantics.
 
+#pragma once
+
 #include <assert.h>
 #include <stdlib.h>
+#include "../popgym_check.h"
 #ifndef PUFFER_PYTHON_EXTENSION
 #include "raylib.h"
 #endif
@@ -23,6 +26,16 @@
 #endif
 #define CONC_SUCCESS_REWARD (1.0f / (float)(CONC_NUM_CARDS / 2))
 #define CONC_FAILURE_REWARD (-1.0f / (float)CONC_EPISODE_LENGTH)
+
+static_assert(CONC_NUM_CARDS >= 2 && CONC_NUM_CARDS % 2 == 0,
+    "cards must come in matchable pairs");
+static_assert(CONC_EPISODE_LENGTH >= 1, "episode length must be positive");
+
+// Render layout: 13 cards per row; the window must be tall enough for the
+// bottom row of the largest (medium, 104-card) board.
+#define CONC_RENDER_ROWS ((CONC_NUM_CARDS + 12) / 13)
+#define CONC_RENDER_HEIGHT_RAW (48 + CONC_RENDER_ROWS * 36 + 12)
+#define CONC_RENDER_HEIGHT (CONC_RENDER_HEIGHT_RAW > 280 ? CONC_RENDER_HEIGHT_RAW : 280)
 
 typedef struct {
     float score;
@@ -113,7 +126,8 @@ void c_step(Concentration* env) {
     env->rewards[0] = 0.0f;
     env->terminals[0] = s->tick >= CONC_EPISODE_LENGTH - 1 ? 1.0f : 0.0f;
 
-    assert(s->in_play_count < 2);
+    POPGYM_CHECK(s->in_play_count < 2,
+        "in_play_count invariant violated (%d)", s->in_play_count);
     s->in_play_idx[s->in_play_count] = action;
     s->in_play_count += 1;
     refresh_observations(env);
@@ -155,7 +169,7 @@ void c_render(Concentration* env) {
     (void)env;
 #else
     if (!IsWindowReady()) {
-        InitWindow(560, 280, "PufferLib Concentration");
+        InitWindow(560, CONC_RENDER_HEIGHT, "PufferLib Concentration");
         SetTargetFPS(20);
     }
     if (IsKeyDown(KEY_ESCAPE)) {

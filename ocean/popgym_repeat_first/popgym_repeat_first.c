@@ -1,10 +1,14 @@
 #include "popgym_repeat_first.h"
 #include "raylib.h"
 
+#ifndef RF_ALIAS_NUM_DECKS
+#define RF_ALIAS_NUM_DECKS 1
+#endif
+
 int main(void) {
     RepeatFirst env = {0};
     env.num_agents = 1;
-    env.num_decks = 1;
+    env.num_decks = RF_ALIAS_NUM_DECKS;
     env.rng = 42;
 
     init(&env);

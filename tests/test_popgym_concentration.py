@@ -1,50 +1,24 @@
-import ctypes
-
 import numpy as np
 import pytest
 
-
-def _skip_if_wrong_env():
-    try:
-        import pufferlib._C as C
-    except Exception as exc:
-        pytest.skip(f"pufferlib._C unavailable or build required: {exc}")
-
-    if C.env_name != "popgym_concentration":
-        pytest.skip(
-            "Build the target env first: "
-            "PYTHON=.venv/bin/python ./build.sh popgym_concentration --cpu"
-        )
-    return C
-
-
-def _make_vec(total_agents=1):
-    C = _skip_if_wrong_env()
-    args = {
-        "vec": {"total_agents": total_agents, "num_buffers": 1, "num_threads": 1},
-        "env": {},
-    }
-    vec = C.create_vec(args, 0)
-    vec.reset()
-    return vec
+from tests.popgym_helpers import (
+        obs_array,
+        rewards_array,
+        steps_until_terminal,
+        terminals_array,
+        vec_for,
+    )
 
 
 def test_concentration_smoke():
-    vec = _make_vec(total_agents=16)
-    try:
+    with vec_for("popgym_concentration", total_agents=16) as vec:
         assert vec.obs_size == 52
         assert vec.num_atns == 1
         assert list(vec.act_sizes) == [52]
 
-        obs = np.ctypeslib.as_array(
-            (ctypes.c_ubyte * (vec.total_agents * vec.obs_size)).from_address(vec.obs_ptr)
-        ).reshape(vec.total_agents, vec.obs_size)
-        rewards = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.rewards_ptr)
-        )
-        terminals = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.terminals_ptr)
-        )
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         actions = np.random.randint(0, 52, size=(vec.total_agents, 1)).astype(np.float32)
 
         assert np.all(obs == 13)
@@ -55,16 +29,13 @@ def test_concentration_smoke():
             assert np.all(obs <= 13)
             assert rewards.shape == (vec.total_agents,)
             assert terminals.shape == (vec.total_agents,)
-    finally:
-        vec.close()
 
 
 def test_concentration_same_card_twice_penalty_and_obs_timing():
-    vec = _make_vec()
-    try:
-        obs = np.ctypeslib.as_array((ctypes.c_ubyte * vec.obs_size).from_address(vec.obs_ptr))
-        rewards = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.rewards_ptr))
-        terminals = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.terminals_ptr))
+    with vec_for("popgym_concentration") as vec:
+        obs = obs_array(vec)[0]
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         action = np.zeros((1, 1), dtype=np.float32)
 
         vec.cpu_step(action.ctypes.data)
@@ -84,24 +55,13 @@ def test_concentration_same_card_twice_penalty_and_obs_timing():
         assert rewards[0] == 0.0
         assert obs[0] == 13
         assert obs[1] < 13
-    finally:
-        vec.close()
 
 
 def test_concentration_terminal_step_preserves_reward():
-    vec = _make_vec()
-    try:
-        rewards = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.rewards_ptr))
-        terminals = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.terminals_ptr))
+    with vec_for("popgym_concentration") as vec:
+        rewards = rewards_array(vec)
         action = np.zeros((1, 1), dtype=np.float32)
 
-        for tick in range(104):
-            vec.cpu_step(action.ctypes.data)
-            if terminals[0]:
-                assert tick == 103
-                assert rewards[0] == pytest.approx(-2.0 / 104.0)
-                break
-        else:
-            pytest.fail("episode did not truncate after 104 steps")
-    finally:
-        vec.close()
+        steps = steps_until_terminal(vec, action, 104)
+        assert steps == 104
+        assert rewards[0] == pytest.approx(-2.0 / 104.0)

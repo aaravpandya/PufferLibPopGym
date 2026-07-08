@@ -1,2 +1,2 @@
-#define HL_ALIAS_NUM_DECKS 3
-#include "../popgym_higher_lower/alias_binding.h"
+#include "popgym_higher_lower_hard.h"
+#include "../popgym_higher_lower/binding.c"

@@ -1,50 +1,24 @@
-import ctypes
-
 import numpy as np
 import pytest
 
-
-def _skip_if_wrong_env():
-    try:
-        import pufferlib._C as C
-    except Exception as exc:
-        pytest.skip(f"pufferlib._C unavailable or build required: {exc}")
-
-    if C.env_name != "popgym_repeat_first":
-        pytest.skip(
-            "Build the target env first: "
-            "PYTHON=.venv/bin/python ./build.sh popgym_repeat_first --cpu"
-        )
-    return C
-
-
-def _make_vec(total_agents=1, num_decks=1):
-    C = _skip_if_wrong_env()
-    args = {
-        "vec": {"total_agents": total_agents, "num_buffers": 1, "num_threads": 1},
-        "env": {"num_decks": num_decks},
-    }
-    vec = C.create_vec(args, 0)
-    vec.reset()
-    return vec
+from tests.popgym_helpers import (
+        obs_array,
+        rewards_array,
+        steps_until_terminal,
+        terminals_array,
+        vec_for,
+    )
 
 
 def test_repeat_first_smoke():
-    vec = _make_vec(total_agents=16)
-    try:
+    with vec_for("popgym_repeat_first", total_agents=16) as vec:
         assert vec.obs_size == 1
         assert vec.num_atns == 1
         assert list(vec.act_sizes) == [4]
 
-        obs = np.ctypeslib.as_array(
-            (ctypes.c_ubyte * (vec.total_agents * vec.obs_size)).from_address(vec.obs_ptr)
-        ).reshape(vec.total_agents, vec.obs_size)
-        rewards = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.rewards_ptr)
-        )
-        terminals = np.ctypeslib.as_array(
-            (ctypes.c_float * vec.total_agents).from_address(vec.terminals_ptr)
-        )
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         actions = np.random.randint(0, 4, size=(vec.total_agents, 1)).astype(np.float32)
 
         for _ in range(100):
@@ -55,16 +29,13 @@ def test_repeat_first_smoke():
             assert np.all(obs < 4)
             assert rewards.shape == (vec.total_agents,)
             assert terminals.shape == (vec.total_agents,)
-    finally:
-        vec.close()
 
 
 def test_repeat_first_rewards_repeat_initial_suit():
-    vec = _make_vec()
-    try:
-        obs = np.ctypeslib.as_array((ctypes.c_ubyte * vec.obs_size).from_address(vec.obs_ptr))
-        reward = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.rewards_ptr))
-        terminal = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.terminals_ptr))
+    with vec_for("popgym_repeat_first") as vec:
+        obs = obs_array(vec)[0]
+        reward = rewards_array(vec)
+        terminal = terminals_array(vec)
         action = np.zeros((1, 1), dtype=np.float32)
 
         first_suit = int(obs[0])
@@ -78,45 +49,25 @@ def test_repeat_first_rewards_repeat_initial_suit():
         vec.cpu_step(action.ctypes.data)
         assert reward[0] == pytest.approx(-1.0 / 51.0)
         assert terminal[0] == 0.0
-    finally:
-        vec.close()
 
 
 def test_repeat_first_terminal_step_preserves_reward():
-    vec = _make_vec()
-    try:
-        obs = np.ctypeslib.as_array((ctypes.c_ubyte * vec.obs_size).from_address(vec.obs_ptr))
-        reward = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.rewards_ptr))
-        terminal = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.terminals_ptr))
+    with vec_for("popgym_repeat_first") as vec:
+        obs = obs_array(vec)[0]
+        reward = rewards_array(vec)
         action = np.array([[int(obs[0])]], dtype=np.float32)
 
-        for tick in range(51):
-            vec.cpu_step(action.ctypes.data)
-            if terminal[0]:
-                assert tick == 50
-                assert reward[0] == pytest.approx(1.0 / 51.0)
-                break
-        else:
-            pytest.fail("episode did not terminate after 51 steps")
-    finally:
-        vec.close()
+        steps = steps_until_terminal(vec, action, 51)
+        assert steps == 51
+        assert reward[0] == pytest.approx(1.0 / 51.0)
 
 
 def test_repeat_first_num_decks_controls_episode_length():
-    vec = _make_vec(num_decks=2)
-    try:
-        obs = np.ctypeslib.as_array((ctypes.c_ubyte * vec.obs_size).from_address(vec.obs_ptr))
-        reward = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.rewards_ptr))
-        terminal = np.ctypeslib.as_array((ctypes.c_float * 1).from_address(vec.terminals_ptr))
+    with vec_for("popgym_repeat_first", env_kwargs={"num_decks": 2}) as vec:
+        obs = obs_array(vec)[0]
+        reward = rewards_array(vec)
         action = np.array([[int(obs[0])]], dtype=np.float32)
 
-        for tick in range(103):
-            vec.cpu_step(action.ctypes.data)
-            if terminal[0]:
-                assert tick == 102
-                assert reward[0] == pytest.approx(1.0 / 103.0)
-                break
-        else:
-            pytest.fail("episode did not terminate after 103 steps")
-    finally:
-        vec.close()
+        steps = steps_until_terminal(vec, action, 103)
+        assert steps == 103
+        assert reward[0] == pytest.approx(1.0 / 103.0)

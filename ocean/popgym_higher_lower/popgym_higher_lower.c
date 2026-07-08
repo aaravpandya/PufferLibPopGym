@@ -1,10 +1,14 @@
 #include "popgym_higher_lower.h"
 #include "raylib.h"
 
+#ifndef HL_ALIAS_NUM_DECKS
+#define HL_ALIAS_NUM_DECKS 1
+#endif
+
 int main(void) {
     HigherLower env = {0};
     env.num_agents = 1;
-    env.num_decks = 1;
+    env.num_decks = HL_ALIAS_NUM_DECKS;
     env.rng = 42;
 
     init(&env);

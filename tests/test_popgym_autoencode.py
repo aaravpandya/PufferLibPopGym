@@ -1,55 +1,18 @@
-import ctypes
-
 import numpy as np
 import pytest
 
-
-def _skip_if_wrong_env():
-    try:
-        import pufferlib._C as C
-    except Exception as exc:
-        pytest.skip(f"pufferlib._C unavailable or build required: {exc}")
-
-    if C.env_name != "popgym_autoencode":
-        pytest.skip(
-            "Build the target env first: "
-            "PYTHON=.venv/bin/python ./build.sh popgym_autoencode --cpu"
-        )
-    return C
-
-
-def _make_vec(total_agents=1, num_decks=1):
-    C = _skip_if_wrong_env()
-    args = {
-        "vec": {"total_agents": total_agents, "num_buffers": 1, "num_threads": 1},
-        "env": {"num_decks": num_decks},
-    }
-    vec = C.create_vec(args, 0)
-    vec.reset()
-    return vec
-
-
-def _arrays(vec):
-    obs = np.ctypeslib.as_array(
-        (ctypes.c_ubyte * (vec.total_agents * vec.obs_size)).from_address(vec.obs_ptr)
-    ).reshape(vec.total_agents, vec.obs_size)
-    rewards = np.ctypeslib.as_array(
-        (ctypes.c_float * vec.total_agents).from_address(vec.rewards_ptr)
-    )
-    terminals = np.ctypeslib.as_array(
-        (ctypes.c_float * vec.total_agents).from_address(vec.terminals_ptr)
-    )
-    return obs, rewards, terminals
+from tests.popgym_helpers import obs_array, rewards_array, terminals_array, vec_for
 
 
 def test_autoencode_smoke():
-    vec = _make_vec(total_agents=16)
-    try:
+    with vec_for("popgym_autoencode", total_agents=16) as vec:
         assert vec.obs_size == 2
         assert vec.num_atns == 1
         assert list(vec.act_sizes) == [4]
 
-        obs, rewards, terminals = _arrays(vec)
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         actions = np.random.randint(0, 4, size=(vec.total_agents, 1)).astype(np.float32)
 
         for _ in range(120):
@@ -60,14 +23,13 @@ def test_autoencode_smoke():
             assert np.all(obs[:, 1] < 4)
             assert rewards.shape == (vec.total_agents,)
             assert terminals.shape == (vec.total_agents,)
-    finally:
-        vec.close()
 
 
 def test_autoencode_watch_then_recite_reverse():
-    vec = _make_vec()
-    try:
-        obs, rewards, terminals = _arrays(vec)
+    with vec_for("popgym_autoencode") as vec:
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         action = np.zeros((1, 1), dtype=np.float32)
 
         seen = [int(obs[0, 1])]
@@ -96,14 +58,13 @@ def test_autoencode_watch_then_recite_reverse():
             assert obs[0, 1] == 0
         else:
             pytest.fail("episode did not terminate after reciting all cards")
-    finally:
-        vec.close()
 
 
 def test_autoencode_wrong_action_penalty():
-    vec = _make_vec()
-    try:
-        obs, rewards, terminals = _arrays(vec)
+    with vec_for("popgym_autoencode") as vec:
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         action = np.zeros((1, 1), dtype=np.float32)
         seen = [int(obs[0, 1])]
 
@@ -115,14 +76,13 @@ def test_autoencode_wrong_action_penalty():
         vec.cpu_step(action.ctypes.data)
         assert rewards[0] == pytest.approx(-1.0 / 52.0)
         assert terminals[0] == 0.0
-    finally:
-        vec.close()
 
 
 def test_autoencode_num_decks_controls_episode_length():
-    vec = _make_vec(num_decks=2)
-    try:
-        obs, rewards, terminals = _arrays(vec)
+    with vec_for("popgym_autoencode", env_kwargs={"num_decks": 2}) as vec:
+        obs = obs_array(vec)
+        rewards = rewards_array(vec)
+        terminals = terminals_array(vec)
         action = np.zeros((1, 1), dtype=np.float32)
         seen = [int(obs[0, 1])]
 
@@ -142,5 +102,3 @@ def test_autoencode_num_decks_controls_episode_length():
                 break
         else:
             pytest.fail("episode did not terminate after 207 total steps")
-    finally:
-        vec.close()
