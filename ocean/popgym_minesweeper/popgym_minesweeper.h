@@ -8,10 +8,16 @@
 #include "raylib.h"
 #endif
 
+#ifndef MS_ROWS
 #define MS_ROWS 4
+#endif
+#ifndef MS_COLS
 #define MS_COLS 4
+#endif
 #define MS_CELLS (MS_ROWS * MS_COLS)
+#ifndef MS_MINES
 #define MS_MINES 2
+#endif
 #define MS_CLEAR 0
 #define MS_MINE 1
 #define MS_VIEWED 2

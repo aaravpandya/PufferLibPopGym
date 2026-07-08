@@ -6,6 +6,66 @@ import pytest
 from pufferlib.native_envs import load_native_env
 
 
+NATIVE_POPGYM_ENVS = (
+    "popgym_autoencode",
+    "popgym_autoencode_easy",
+    "popgym_autoencode_hard",
+    "popgym_autoencode_medium",
+    "popgym_battleship",
+    "popgym_battleship_easy",
+    "popgym_battleship_hard",
+    "popgym_battleship_medium",
+    "popgym_concentration",
+    "popgym_concentration_easy",
+    "popgym_concentration_hard",
+    "popgym_concentration_medium",
+    "popgym_count_recall",
+    "popgym_count_recall_easy",
+    "popgym_count_recall_hard",
+    "popgym_count_recall_medium",
+    "popgym_higher_lower",
+    "popgym_higher_lower_easy",
+    "popgym_higher_lower_hard",
+    "popgym_higher_lower_medium",
+    "popgym_minesweeper",
+    "popgym_minesweeper_easy",
+    "popgym_minesweeper_hard",
+    "popgym_minesweeper_medium",
+    "popgym_multiarmed_bandit",
+    "popgym_multiarmed_bandit_easy",
+    "popgym_multiarmed_bandit_hard",
+    "popgym_multiarmed_bandit_medium",
+    "popgym_noisy_position_only_cartpole",
+    "popgym_noisy_position_only_cartpole_easy",
+    "popgym_noisy_position_only_cartpole_hard",
+    "popgym_noisy_position_only_cartpole_medium",
+    "popgym_noisy_position_only_pendulum",
+    "popgym_noisy_position_only_pendulum_easy",
+    "popgym_noisy_position_only_pendulum_hard",
+    "popgym_noisy_position_only_pendulum_medium",
+    "popgym_position_only_cartpole",
+    "popgym_position_only_cartpole_easy",
+    "popgym_position_only_cartpole_hard",
+    "popgym_position_only_cartpole_medium",
+    "popgym_position_only_pendulum",
+    "popgym_position_only_pendulum_easy",
+    "popgym_position_only_pendulum_hard",
+    "popgym_position_only_pendulum_medium",
+    "popgym_repeat_first",
+    "popgym_repeat_first_easy",
+    "popgym_repeat_first_hard",
+    "popgym_repeat_first_medium",
+    "popgym_repeat_previous",
+    "popgym_repeat_previous_easy",
+    "popgym_repeat_previous_hard",
+    "popgym_repeat_previous_medium",
+    "popgym_velocity_only_cartpole",
+    "popgym_velocity_only_cartpole_easy",
+    "popgym_velocity_only_cartpole_hard",
+    "popgym_velocity_only_cartpole_medium",
+)
+
+
 def _load_or_skip(env_name):
     try:
         return load_native_env(env_name)
@@ -13,13 +73,11 @@ def _load_or_skip(env_name):
         pytest.skip(str(exc))
 
 
-def test_load_repeat_previous_and_minesweeper_side_by_side():
-    repeat_previous = _load_or_skip("popgym_repeat_previous")
-    minesweeper = _load_or_skip("popgym_minesweeper")
+def test_load_popgym_envs_side_by_side():
+    modules = [_load_or_skip(env_name) for env_name in NATIVE_POPGYM_ENVS]
 
-    assert repeat_previous.env_name == "popgym_repeat_previous"
-    assert minesweeper.env_name == "popgym_minesweeper"
-    assert repeat_previous is not minesweeper
+    assert [module.env_name for module in modules] == list(NATIVE_POPGYM_ENVS)
+    assert len({id(module) for module in modules}) == len(modules)
 
 
 def test_native_minesweeper_smoke():
